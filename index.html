@@ -1,1 +1,451 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ETF Portfolio Agent — Chris van Roosmalen</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff; --bg-s: #f5f5f3; --bg-t: #eeede8;
+    --tx: #1a1a18; --tx-s: #6b6b67;
+    --br: rgba(0,0,0,0.12); --br-m: rgba(0,0,0,0.22);
+    --rm: 8px; --rl: 12px;
+    --green: #1D9E75; --green-bg: #E1F5EE; --green-tx: #0F6E56;
+    --red: #D85A30; --red-bg: #FAECE7; --red-tx: #993C1D;
+    --amber: #EF9F27; --amber-bg: #FAEEDA; --amber-tx: #854F0B;
+    --blue: #378ADD; --blue-bg: #E6F1FB; --blue-tx: #185FA5;
+    --purple: #7F77DD; --purple-bg: #EEEDFE; --purple-tx: #534AB7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a; --bg-s: #252523; --bg-t: #2e2e2c;
+      --tx: #f0efea; --tx-s: #9a9a94;
+      --br: rgba(255,255,255,0.1); --br-m: rgba(255,255,255,0.2);
+      --green-bg: #085041; --green-tx: #9FE1CB;
+      --red-bg: #4A1B0C; --red-tx: #F5C4B3;
+      --amber-bg: #412402; --amber-tx: #FAC775;
+      --blue-bg: #042C53; --blue-tx: #B5D4F4;
+      --purple-bg: #26215C; --purple-tx: #AFA9EC;
+    }
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; font-size: 15px; color: var(--tx); background: var(--bg-t); min-height: 100vh; }
+  .topbar { background: var(--bg); border-bottom: 0.5px solid var(--br); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 56px; position: sticky; top: 0; z-index: 100; }
+  .logo { font-size: 15px; font-weight: 500; }
+  .pill { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--tx-s); background: var(--bg-s); padding: 4px 10px; border-radius: 20px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .dg { background: var(--green); } .da { background: var(--amber); } .dr { background: var(--red); }
+  .main { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+  .sg { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 1.5rem; }
+  .metric { background: var(--bg); border: 0.5px solid var(--br); border-radius: var(--rl); padding: 1rem 1.25rem; }
+  .ml { font-size: 11px; color: var(--tx-s); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+  .mv { font-size: 22px; font-weight: 500; line-height: 1.2; }
+  .ms { font-size: 12px; color: var(--tx-s); margin-top: 6px; }
+  .pos { color: var(--green); } .neg { color: var(--red); }
+  .tabs { display: flex; background: var(--bg); border: 0.5px solid var(--br); border-radius: var(--rl); padding: 4px; margin-bottom: 1.5rem; }
+  .tab { flex: 1; padding: 8px 12px; font-size: 13px; color: var(--tx-s); cursor: pointer; border: none; background: none; border-radius: var(--rm); transition: all .15s; }
+  .tab.active { background: var(--bg-s); color: var(--tx); font-weight: 500; }
+  .tab:hover:not(.active) { color: var(--tx); }
+  .panel { display: none; } .panel.active { display: block; }
+  .card { background: var(--bg); border: 0.5px solid var(--br); border-radius: var(--rl); padding: 1.25rem; margin-bottom: 1rem; }
+  .ct { font-size: 11px; font-weight: 500; color: var(--tx-s); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 1rem; }
+  table { width: 100%; border-collapse: collapse; }
+  th { font-size: 11px; color: var(--tx-s); font-weight: 500; text-align: left; padding: 0 0 10px; border-bottom: 0.5px solid var(--br); }
+  th:not(:first-child), td:not(:first-child) { text-align: right; }
+  td { padding: 13px 0; font-size: 14px; border-bottom: 0.5px solid var(--br); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  .en { font-weight: 500; } .es { font-size: 11px; color: var(--tx-s); margin-top: 2px; }
+  .badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+  .blt { background: var(--blue-bg); color: var(--blue-tx); }
+  .bkt { background: var(--amber-bg); color: var(--amber-tx); }
+  .bok { background: var(--green-bg); color: var(--green-tx); }
+  .bwn { background: var(--amber-bg); color: var(--amber-tx); }
+  .bal { background: var(--red-bg); color: var(--red-tx); }
+  .bkn { background: var(--purple-bg); color: var(--purple-tx); }
+  .tc { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .ai { background: var(--bg-s); border-radius: var(--rm); padding: 1rem 1.25rem; font-size: 14px; line-height: 1.7; min-height: 80px; color: var(--tx); white-space: pre-wrap; }
+  .ai.loading { color: var(--tx-s); font-style: italic; }
+  .ai.error { color: var(--red); }
+  .sh { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+  .st { font-size: 15px; font-weight: 500; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: var(--rm); font-size: 13px; cursor: pointer; border: 0.5px solid var(--br-m); background: transparent; color: var(--tx); transition: background .15s; }
+  .btn:hover { background: var(--bg-s); }
+  .btn-p { background: var(--tx); color: var(--bg); border-color: transparent; }
+  .btn-p:hover { opacity: .85; background: var(--tx); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .spin { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--br); border-top-color: var(--tx); border-radius: 50%; animation: sp .7s linear infinite; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  .lu { font-size: 11px; color: var(--tx-s); }
+  .ni { padding: 14px 0; border-bottom: 0.5px solid var(--br); }
+  .ni:last-child { border-bottom: none; }
+  .nm { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--tx-s); margin-bottom: 6px; }
+  .nh { font-size: 14px; font-weight: 500; line-height: 1.4; margin-bottom: 4px; }
+  .nx { font-size: 12px; color: var(--tx-s); line-height: 1.5; }
+  .tag { display: inline-block; background: var(--bg-s); padding: 2px 7px; border-radius: 3px; font-size: 11px; color: var(--tx-s); }
+  .ai-it { display: flex; gap: 10px; padding: 12px; background: var(--bg-s); border-radius: var(--rm); margin-bottom: 8px; }
+  .ai-it:last-child { margin-bottom: 0; }
+  .ai-ic { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+  .ai-ti { font-size: 13px; font-weight: 500; margin-bottom: 3px; }
+  .ai-de { font-size: 12px; color: var(--tx-s); line-height: 1.5; }
+  .ep { border: 0.5px solid var(--br); border-radius: var(--rl); overflow: hidden; }
+  .eh { padding: 14px 18px; background: var(--bg-s); border-bottom: 0.5px solid var(--br); }
+  .em { font-size: 12px; color: var(--tx-s); margin-bottom: 2px; }
+  .es2 { font-size: 14px; font-weight: 500; }
+  .eb { padding: 20px 18px; font-size: 14px; line-height: 1.7; }
+  .ll { font-family: 'SF Mono','Fira Code',monospace; font-size: 12px; color: var(--tx-s); line-height: 2; }
+  .sr { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 0.5px solid var(--br); font-size: 14px; }
+  .sr:last-child { border-bottom: none; }
+  .sl { color: var(--tx-s); font-size: 12px; }
+  select { background: var(--bg); color: var(--tx); border: 0.5px solid var(--br-m); border-radius: var(--rm); padding: 6px 10px; font-size: 13px; }
+  input[type=range] { width: 100px; }
+  .divider { border: none; border-top: 0.5px solid var(--br); margin: 1rem 0; }
+  .dl { text-align: center; padding: 1.5rem; color: var(--tx-s); font-size: 13px; }
+  .ai-row { display: flex; align-items: center; gap: 6px; }
+  @media (max-width: 700px) { .sg { grid-template-columns: 1fr 1fr; } .tc { grid-template-columns: 1fr; } .main { padding: 1rem; } .topbar { padding: 0 1rem; } }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div class="logo">ETF Portfolio Agent</div>
+    <div class="pill"><span class="dot da" id="sdot"></span><span id="stxt">Opstarten...</span></div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <button class="btn" onclick="refreshAll()" id="rbtn">↻ Vernieuwen</button>
+    <button class="btn btn-p" onclick="showTab('mail',document.querySelectorAll(\'.tab\')[3])">✉ Weekmail</button>
+  </div>
+</div>
 
+<div class="main">
+  <div class="sg">
+    <div class="metric"><div class="ml">Totale waarde</div><div class="mv" id="tv">—</div><div class="ms" id="tg">laden...</div></div>
+    <div class="metric"><div class="ml">Dag P&L</div><div class="mv" id="dp">—</div><div class="ms" id="de">laden...</div></div>
+    <div class="metric"><div class="ml">Beste performer</div><div class="mv" id="bp" style="font-size:16px;">—</div><div class="ms" id="bv">laden...</div></div>
+    <div class="metric"><div class="ml">Alert status</div><div class="mv" id="as2" style="font-size:16px;">—</div><div class="ms">drempel: >5% dag</div></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('portfolio',this)">Portefeuille</button>
+    <button class="tab" onclick="showTab('nieuws',this)">Nieuws & analyse</button>
+    <button class="tab" onclick="showTab('advies',this)">Weekadvies</button>
+    <button class="tab" onclick="showTab('mail',this)">Mail preview</button>
+    <button class="tab" onclick="showTab('inst',this)">Instellingen</button>
+  </div>
+
+  <!-- PORTEFEUILLE -->
+  <div id="tab-portfolio" class="panel active">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <div class="ct" style="margin-bottom:0;">Mijn ETF's — live koersen</div>
+        <span class="lu" id="lu">nog niet geladen</span>
+      </div>
+      <table><thead><tr><th>ETF</th><th>Type</th><th>Koers</th><th>Dag %</th><th>Waarde</th><th>Rendement</th><th>Status</th></tr></thead>
+      <tbody id="etb"><tr><td colspan="7" class="dl"><span class="spin"></span> Koersen ophalen via Alpha Vantage...</td></tr></tbody></table>
+    </div>
+    <div class="tc">
+      <div class="card"><div class="ct">Allocatie</div><div id="alc"><div class="dl">Laden...</div></div></div>
+      <div class="card"><div class="ct">Actieve alerts</div><div id="alr"><div class="dl">Laden...</div></div></div>
+    </div>
+  </div>
+
+  <!-- NIEUWS -->
+  <div id="tab-nieuws" class="panel">
+    <div class="sh"><div class="st">Nieuws & AI-analyse</div>
+    <button class="btn" onclick="analyseNieuws()" id="nb">AI-analyse uitvoeren ↗</button></div>
+    <div class="card"><div class="ct">Marktcontext</div>
+      <div class="ni"><div class="nm"><span class="dot da"></span><span>Geopolitiek</span><span class="tag">SMH</span></div><div class="nh">VS exportrestricties chips — impact semiconductors</div><div class="nx">Verhoogde volatiliteit voor VanEck SMH. ASML en Nvidia staan onder druk. Monitor dagwijziging.</div></div>
+      <div class="ni"><div class="nm"><span class="dot dg"></span><span>Rente</span><span class="tag">IWDA</span><span class="tag">CNDX</span></div><div class="nh">Fed houdt rente stabiel — risico-on klimaat intact</div><div class="nx">Positief voor breed gespreide en tech-ETF's. Groei-aandelen profiteren van stabiel renteklimaat.</div></div>
+      <div class="ni"><div class="nm"><span class="dot dg"></span><span>Earnings</span><span class="tag">CNDX</span></div><div class="nh">Big Tech Q1 boven verwachting — AI-groei drijft resultaten</div><div class="nx">Positief voor Nasdaq 100. Apple, Microsoft en Nvidia sterk. AI-investeringen houden aan.</div></div>
+      <div class="ni"><div class="nm"><span class="dot dr"></span><span>Dividend</span><span class="tag">SPYH</span></div><div class="nh">S&P 500 dividend Q1 licht lager dan verwacht</div><div class="nx">Licht negatief voor Invesco Dividend ETF. Houd Q2 dividend cycle in de gaten.</div></div>
+    </div>
+    <div class="card"><div class="ct">AI-analyse op basis van live koersen</div>
+    <div class="ai" id="an">Klik op "AI-analyse uitvoeren" voor analyse op basis van je actuele koersen en nieuws.</div></div>
+  </div>
+
+  <!-- WEEKADVIES -->
+  <div id="tab-advies" class="panel">
+    <div class="sh"><div class="st">Weekadvies</div><button class="btn" onclick="generateAdvies()" id="ab">Advies genereren ↗</button></div>
+    <div class="card"><div class="ct">Watchlist — potentiële posities</div>
+      <table><thead><tr><th>ETF</th><th>Koers</th><th>Dag %</th><th>Signaal</th></tr></thead>
+      <tbody id="wtb"><tr><td colspan="4" class="dl"><span class="spin"></span> Laden...</td></tr></tbody></table>
+    </div>
+    <div class="card"><div class="ct">AI-weekadvies — gebaseerd op live data</div>
+    <div class="ai" id="aa">Klik op "Advies genereren" voor een concreet koop/verkoop advies op basis van actuele koersen.</div></div>
+  </div>
+
+  <!-- MAIL -->
+  <div id="tab-mail" class="panel">
+    <div class="sh"><div class="st">Mail preview</div>
+      <div style="display:flex;gap:8px;">
+        <select id="mtype" onchange="buildMail()"><option value="w">Wekelijkse update</option><option value="a">Koersalert (>5%)</option></select>
+        <button class="btn btn-p" onclick="copyMail()">Kopieer mailtekst ↗</button>
+      </div>
+    </div>
+    <div class="ep">
+      <div class="eh">
+        <div class="em">Aan: roosmalen@outlook.com</div>
+        <div class="em" id="mdate">Datum: —</div>
+        <div class="es2" id="msub">📊 ETF Weekupdate — laden...</div>
+      </div>
+      <div class="eb" id="mbody"><div class="dl">Koersen laden...</div></div>
+    </div>
+  </div>
+
+  <!-- INSTELLINGEN -->
+  <div id="tab-inst" class="panel">
+    <div class="tc">
+      <div class="card"><div class="ct">Portefeuille-instellingen</div>
+        <div class="sr"><span class="sl">Totaal belegd</span><span style="font-weight:500;">€6.000</span></div>
+        <div class="sr"><span class="sl">Alert drempel</span><div style="display:flex;align-items:center;gap:10px;"><input type="range" min="1" max="15" value="5" id="thr" oninput="document.getElementById('tv2').textContent='>'+this.value+'%'"><span id="tv2" style="font-weight:500;min-width:36px;">>5%</span></div></div>
+        <div class="sr"><span class="sl">E-mailadres</span><span>roosmalen@outlook.com</span></div>
+        <div class="sr"><span class="sl">Weekmail dag</span><select><option>Zaterdag</option><option>Maandag</option><option>Vrijdag</option></select></div>
+        <div class="sr"><span class="sl">Rebalancing drempel</span><span>±5% doelgewicht</span></div>
+      </div>
+      <div class="card"><div class="ct">Beleggingsprofiel</div>
+        <div class="sr"><span class="sl">Platform</span><span>ABN AMRO · Zelf Beleggen Basis</span></div>
+        <div class="sr"><span class="sl">Risicoprofiel</span><span>Offensief</span></div>
+        <div class="sr"><span class="sl">Horizon LT</span><span>3–5 jaar</span></div>
+        <div class="sr"><span class="sl">ETF-verdeling</span><span>2 LT · 2 KT</span></div>
+        <div class="sr"><span class="sl">Rebalancing</span><span>Actief</span></div>
+      </div>
+    </div>
+    <div class="card"><div class="ct">Agent log</div><div id="alog"><div class="ll">— wacht op eerste data-fetch —</div></div></div>
+  </div>
+</div>
+
+<script>
+const AV_KEY = 'ZPZ6YIH5L8J92LTN';
+const PROXY = 'https://api.allorigins.win/get?url=';
+const CLAUDE = 'https://api.anthropic.com/v1/messages';
+
+const PORT = [
+  { ticker:'IWDA.LON', name:'iShares Core MSCI World',      isin:'LU0274208692', type:'lt', units:15.5,  avg:96.77,  color:'#378ADD' },
+  { ticker:'CNDX.LON', name:'iShares Nasdaq 100',           isin:'IE00B53SZB19', type:'lt', units:5.8,   avg:103.45, color:'#1D9E75' },
+  { ticker:'SPYH.LON', name:'Invesco S&P 500 High Dividend',isin:'IE00BWTN6Y99', type:'kt', units:45.0,  avg:8.89,   color:'#D85A30' },
+  { ticker:'SMH',      name:'VanEck Semiconductor',         isin:'IE00BMC38736', type:'kt', units:5.2,   avg:225.00, color:'#7F77DD' }
+];
+const WATCH = [
+  { ticker:'INRG.LON', name:'iShares Clean Energy',         isin:'IE00B1XNHC34' },
+  { ticker:'LOCK.LON', name:'iShares Global Cybersecurity', isin:'IE00BG0J4C88' },
+  { ticker:'XMIN.LON', name:'Xtrackers MSCI India',         isin:'IE00BKPSFD47' }
+];
+
+let LD = {}, WD = {}, logs = [];
+let _tv = 0, _tg = 0, _tgp = 0, _dp = 0, _dpe = 0, _alr = [];
+
+function log(m) {
+  const t = new Date().toLocaleTimeString('nl-NL');
+  logs.unshift(`[${t}] ${m}`);
+  if (logs.length > 20) logs.pop();
+  document.getElementById('alog').innerHTML = logs.map(l=>`<div class="ll">${l}</div>`).join('');
+}
+
+async function fetchQ(ticker) {
+  const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${ticker}&apikey=${AV_KEY}`;
+  try {
+    const r = await fetch(PROXY + encodeURIComponent(url));
+    const raw = await r.json();
+    const d = JSON.parse(raw.contents)['Global Quote'];
+    if (!d || !d['05. price']) return null;
+    return {
+      price: parseFloat(d['05. price']),
+      change: parseFloat(d['09. change']),
+      pct: parseFloat(d['10. change percent'].replace('%','')),
+      prev: parseFloat(d['08. previous close'])
+    };
+  } catch { return null; }
+}
+
+async function refreshAll() {
+  const btn = document.getElementById('rbtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Laden...';
+  document.getElementById('stxt').textContent = 'Data ophalen...';
+  document.getElementById('sdot').className = 'dot da';
+  log('Koerscheck gestart via Alpha Vantage');
+
+  let tv = 0, tdpe = 0, alerts = [], bestN = '—', bestP = -999;
+  const tbody = document.getElementById('etb');
+  tbody.innerHTML = '';
+
+  for (const e of PORT) {
+    const q = await fetchQ(e.ticker);
+    LD[e.ticker] = q;
+    const price = q ? q.price : e.avg;
+    const pct   = q ? q.pct   : 0;
+    const chg   = q ? q.change: 0;
+    const val   = e.units * price;
+    const cost  = e.units * e.avg;
+    const ret   = ((val - cost) / cost) * 100;
+    const dpe   = e.units * chg;
+    tv   += val;
+    tdpe += dpe;
+
+    if (Math.abs(pct) > 5)      alerts.push({ name: e.name, pct, sev: 'high' });
+    else if (Math.abs(pct) > 3) alerts.push({ name: e.name, pct, sev: 'med' });
+    if (pct > bestP) { bestP = pct; bestN = e.name.split(' ').slice(-2).join(' '); }
+
+    const src  = q ? '' : ' <span style="font-size:10px;color:var(--amber)">(no live)</span>';
+    const type = e.type === 'lt' ? '<span class="badge blt">Langetermijn</span>' : '<span class="badge bkt">Kortetermijn</span>';
+    const stat = Math.abs(pct) > 5 ? '<span class="badge bal">Alert</span>' : Math.abs(pct) > 3 ? '<span class="badge bwn">Monitoren</span>' : '<span class="badge bok">OK</span>';
+    const pc   = pct >= 0 ? 'pos' : 'neg';
+    const rc   = ret >= 0 ? 'pos' : 'neg';
+
+    tbody.innerHTML += `<tr>
+      <td><div class="en">${e.name}${src}</div><div class="es">${e.ticker.split('.')[0]} · ${e.isin}</div></td>
+      <td>${type}</td>
+      <td>€${price.toFixed(2)}</td>
+      <td class="${pc}">${pct>=0?'+':''}${pct.toFixed(2)}%</td>
+      <td>€${val.toFixed(0)}</td>
+      <td class="${rc}">${ret>=0?'+':''}${ret.toFixed(1)}%</td>
+      <td>${stat}</td></tr>`;
+  }
+
+  const cost6k = 6000;
+  const gain   = tv - cost6k;
+  const gainP  = (gain / cost6k) * 100;
+  const dayP   = (tdpe / tv) * 100;
+
+  _tv = tv; _tg = gain; _tgp = gainP; _dp = dayP; _dpe = tdpe; _alr = alerts;
+
+  // Summary
+  document.getElementById('tv').textContent = '€' + tv.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+  document.getElementById('tg').textContent = `${gain>=0?'+':''}€${Math.abs(gain).toFixed(0)} · ${gainP>=0?'+':''}${gainP.toFixed(1)}%`;
+  document.getElementById('tg').className = 'ms ' + (gain>=0?'pos':'neg');
+  document.getElementById('dp').textContent = `${dayP>=0?'+':''}${dayP.toFixed(2)}%`;
+  document.getElementById('dp').className   = 'mv ' + (dayP>=0?'pos':'neg');
+  document.getElementById('de').textContent = `${tdpe>=0?'+':''}€${Math.abs(tdpe).toFixed(0)} vandaag`;
+  document.getElementById('bp').textContent = bestN;
+  document.getElementById('bv').textContent = `${bestP>=0?'+':''}${bestP.toFixed(2)}% vandaag`;
+  document.getElementById('bv').className   = 'ms ' + (bestP>=0?'pos':'neg');
+  const hc = alerts.filter(a=>a.sev==='high').length;
+  document.getElementById('as2').innerHTML  = hc > 0 ? `<span class="dot dr" style="margin-right:6px;"></span>${hc} alert${hc>1?'s':''}` : `<span class="dot dg" style="margin-right:6px;"></span>Geen alerts`;
+
+  // Allocatie
+  document.getElementById('alc').innerHTML = PORT.map(e => {
+    const q = LD[e.ticker]; const price = q ? q.price : e.avg;
+    const val = e.units * price; const pct = (val/tv*100).toFixed(1);
+    return `<div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px;"><span>${e.name.split(' ').slice(-2).join(' ')}</span><span>${pct}%</span></div>
+      <div style="height:5px;background:var(--bg-s);border-radius:3px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${e.color};border-radius:3px;"></div></div>
+    </div>`;
+  }).join('');
+
+  // Alerts
+  document.getElementById('alr').innerHTML = alerts.length === 0
+    ? `<div class="ai-it"><div class="ai-ic" style="background:var(--green);"></div><div><div class="ai-ti">Geen actieve alerts</div><div class="ai-de">Alle ETF's binnen dagdrempel van 5%.</div></div></div>`
+    : alerts.map(a=>`<div class="ai-it"><div class="ai-ic" style="background:${a.sev==='high'?'var(--red)':'var(--amber)'};"></div><div><div class="ai-ti">${a.name.split(' ').slice(-2).join(' ')} — ${Math.abs(a.pct).toFixed(1)}% ${a.pct>0?'stijging':'daling'}</div><div class="ai-de">${a.sev==='high'?'⚠ Drempel overschreden — overweeg actie.':'Verhoogde beweging — monitoren.'}</div></div></div>`).join('');
+
+  // Watchlist
+  const wtb = document.getElementById('wtb'); wtb.innerHTML = '';
+  for (const e of WATCH) {
+    const q = await fetchQ(e.ticker); WD[e.ticker] = q;
+    const pct = q ? q.pct : 0;
+    const pc  = pct >= 0 ? 'pos' : 'neg';
+    const sig = pct > 2 ? '<span class="badge bkn">Kansen</span>' : pct > 0 ? '<span class="badge bok">Positief</span>' : '<span class="badge bwn">Zwak</span>';
+    wtb.innerHTML += `<tr><td><div class="en">${e.name}</div><div class="es">${e.ticker.split('.')[0]} · ${e.isin}</div></td><td>${q?'€'+q.price.toFixed(2):'—'}</td><td class="${pc}">${pct>=0?'+':''}${pct.toFixed(2)}%</td><td>${sig}</td></tr>`;
+  }
+
+  const now = new Date().toLocaleString('nl-NL',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'});
+  document.getElementById('lu').textContent   = `Bijgewerkt: ${now}`;
+  document.getElementById('mdate').textContent = `Datum: ${now}`;
+  document.getElementById('stxt').textContent  = 'Live data actief';
+  document.getElementById('sdot').className    = 'dot dg';
+  btn.disabled = false; btn.textContent = '↻ Vernieuwen';
+  log(`Koerscheck klaar — waarde €${tv.toFixed(0)}, ${hc} alerts`);
+  buildMail();
+}
+
+function portCtx() {
+  return PORT.map(e => {
+    const q = LD[e.ticker]; const p = q ? q.price : e.avg; const pct = q ? q.pct : 0;
+    const val = e.units * p; const ret = ((val - e.units*e.avg)/(e.units*e.avg)*100).toFixed(1);
+    return `- ${e.name}: €${p.toFixed(2)} (${pct>=0?'+':''}${pct.toFixed(2)}% dag), waarde €${val.toFixed(0)}, rendement ${ret}%, ${e.type==='lt'?'langetermijn':'kortetermijn'}`;
+  }).join('\n');
+}
+function watchCtx() {
+  return WATCH.map(e => { const q = WD[e.ticker]; const pct = q ? q.pct : 0; return `- ${e.name}: ${pct>=0?'+':''}${pct.toFixed(2)}% dag`; }).join('\n');
+}
+
+async function callClaude(prompt, id, btnId) {
+  const el = document.getElementById(id); const btn = document.getElementById(btnId);
+  if (btn) btn.disabled = true;
+  el.className = 'ai loading'; el.textContent = 'Analyseren op basis van live data...';
+  try {
+    const r = await fetch(CLAUDE, { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, messages:[{role:'user',content:prompt}] }) });
+    const d = await r.json();
+    el.className = 'ai'; el.textContent = d.content?.map(i=>i.text||'').join('') || 'Geen resultaat.';
+    log('AI-analyse voltooid');
+  } catch { el.className = 'ai error'; el.textContent = 'Fout bij AI-analyse.'; }
+  if (btn) btn.disabled = false;
+}
+
+function analyseNieuws() {
+  callClaude(`Je bent een ETF-portefeuilleadviseur. Analyseer het nieuwsimpact op basis van LIVE koersen:
+
+${portCtx()}
+
+Marktcontext: Fed rente stabiel (positief groei), VS/China chiprestricties (negatief semiconductors), Big Tech Q1 sterk (positief Nasdaq), S&P dividend licht lager (licht negatief dividend-ETF's).
+
+Profiel: offensief, horizon 3-5 jaar, ABN AMRO Zelf Beleggen Basis, €6.000 belegd.
+
+Schrijf 4-5 zakelijke zinnen in het Nederlands. Geen opsommingstekens. Noem concrete ETF's. Geef aan of actie vereist is.`, 'an', 'nb');
+}
+
+function generateAdvies() {
+  callClaude(`Je bent een ETF-adviseur. Geef een concreet weekadvies op basis van LIVE koersen.
+
+Portefeuille:
+${portCtx()}
+
+Watchlist (potentiële aankopen):
+${watchCtx()}
+
+Profiel: offensief, horizon 3-5 jaar, ABN AMRO Zelf Beleggen Basis, €6.000.
+
+Geef direct advies: welke ETF eventueel verkopen, welke kopen, waarom. Max 5 zinnen, Nederlands, geen opsommingstekens. Noem namen en bedragen.`, 'aa', 'ab');
+}
+
+function buildMail() {
+  const type = document.getElementById('mtype').value;
+  const s = v => v >= 0 ? '+' : '';
+  const ha = _alr.filter(a=>a.sev==='high').length;
+  if (type === 'a' && ha > 0) {
+    const a = _alr.find(a=>a.sev==='high');
+    document.getElementById('msub').textContent = `🚨 KOERSALERT — ${a.name.split(' ').slice(-2).join(' ')} ${s(a.pct)}${a.pct.toFixed(1)}% | Actie vereist`;
+    document.getElementById('mbody').innerHTML = `<p style="margin-bottom:12px;">Hoi Chris,</p>
+      <p style="margin-bottom:12px;color:var(--red);font-weight:500;">⚠ ${a.name} is ${s(a.pct)}${a.pct.toFixed(1)}% ${a.pct<0?'gedaald':'gestegen'} — drempel overschreden.</p>
+      <p style="font-size:13px;color:var(--tx-s);margin-bottom:16px;">Bekijk je portefeuille en overweeg actie via ABN AMRO.</p>
+      <div class="divider"></div><p style="font-size:12px;color:var(--tx-s);">ETF Portfolio Agent · automatisch gegenereerd</p>`;
+  } else {
+    document.getElementById('msub').textContent = `📊 ETF Weekupdate — ${s(_tgp)}${_tgp.toFixed(1)}% | ${ha===0?'Geen alerts':ha+' alert(s)'}`;
+    document.getElementById('mbody').innerHTML = `<p style="margin-bottom:12px;">Hoi Chris,</p>
+      <p style="margin-bottom:12px;">Hier je wekelijkse ETF-update op basis van live koersen.</p>
+      <p style="font-weight:500;margin-bottom:8px;">Portefeuillestatus</p>
+      <p style="margin-bottom:4px;font-size:13px;color:var(--tx-s);">Totale waarde: €${_tv.toFixed(0)} (${s(_tg)}€${Math.abs(_tg).toFixed(0)} / ${s(_tgp)}${_tgp.toFixed(1)}%)</p>
+      <p style="margin-bottom:16px;font-size:13px;color:var(--tx-s);">Dagrendement: ${s(_dp)}${_dp.toFixed(2)}% (${s(_dpe)}€${Math.abs(_dpe).toFixed(0)})</p>
+      ${_alr.length>0?`<p style="font-weight:500;margin-bottom:8px;">Aandachtspunten</p>${_alr.map(a=>`<p style="margin-bottom:8px;font-size:13px;color:var(--tx-s);">${a.sev==='high'?'⚠':'💡'} ${a.name.split(' ').slice(-2).join(' ')} — ${s(a.pct)}${a.pct.toFixed(1)}%</p>`).join('')}`:'<p style="font-size:13px;color:var(--tx-s);">✓ Geen alerts — alle ETF\'s binnen drempel.</p>'}
+      <div class="divider"></div><p style="font-size:12px;color:var(--tx-s);">ETF Portfolio Agent · roosmalen@outlook.com</p>`;
+  }
+}
+
+function copyMail() {
+  const sub  = document.getElementById('msub').textContent;
+  const body = document.getElementById('mbody').innerText;
+  navigator.clipboard.writeText(`Onderwerp: ${sub}\n\n${body}`).then(() => {
+    const b = event.target; b.textContent = '✓ Gekopieerd';
+    setTimeout(()=>b.textContent='Kopieer mailtekst ↗', 2000);
+  });
+}
+
+function showTab(n, el) {
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+n).classList.add('active');
+  el.classList.add('active');
+}
+
+window.addEventListener('load', () => { log('Agent gestart'); refreshAll(); });
+</script>
+</body>
+</html>
